@@ -15,94 +15,19 @@
 
 import collections
 import json
-import requests
-import uuid
 import logging
+import uuid
 
-from requests.adapters import HTTPAdapter
-
-from .errors import ResponseError, EntryCreatedError, OperationCompletionError
+from api.dispatcher import APIDispatcher
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
 
 
-def _get_id(response):
-    try:
-        return _get_data(response)["id"]
-    except KeyError:
-        raise EntryCreatedError(
-            "No 'id' in response: {0}".format(response.text))
-
-
-def _get_msg(response):
-    try:
-        return _get_data(response)["msg"]
-    except KeyError:
-        raise OperationCompletionError(
-            "No 'msg' in response: {0}".format(response.text))
-
-
-def _get_data(response):
-    data = _get_json(response)
-    error_messages = _get_messages(data)
-    error_count = len(error_messages)
-
-    if error_count == 1:
-        raise ResponseError(error_messages[0])
-    elif error_count > 1:
-        raise ResponseError(
-            "\n  - ".join(["Multiple errors:"] + error_messages))
-    elif not response.ok:
-        response.raise_for_status()
-    elif not data:
-        raise ResponseError("Empty response")
-    else:
-        return data
-
-
-def _get_json(response):
-    try:
-        if response.text:
-            return response.json()
-        else:
-            return {}
-    except ValueError as value_error:
-        raise ResponseError(
-            "Invalid response: {0}: {1}".format(value_error, response.text))
-
-
-def _get_messages(data):
-    error_messages = []
-    for ret in data.get("responses", [data]):
-        if "message" in ret:
-            if "error_code" in ret:
-                error_messages.append(
-                    "{0}: {1}".format(ret["error_code"], ret["message"]))
-            else:
-                error_messages.append(ret["message"])
-
-    return error_messages
-
-
-def uri_join(*uri_parts):
-    """Join uri parts.
-
-    Avoiding usage of urlparse.urljoin and os.path.join
-    as it does not clearly join parts.
-
-    Args:
-        *uri_parts: tuple of values for join, can contain back and forward
-                    slashes (will be stripped up).
-
-    Returns:
-        An uri string.
-    """
-    return '/'.join(str(s).strip('/').strip('\\') for s in uri_parts)
-
-
 class ReportPortalService(object):
-    """Service class with report portal event callbacks."""
+    """
+    Service class with report portal event callbacks.
+    """
 
     def __init__(self, endpoint, project, token, api_base="api/v1",
                  is_skipped_an_issue=True, verify_ssl=True, retries=None):
@@ -117,43 +42,18 @@ class ReportPortalService(object):
                 'To Investigate' items on Server side.
             verify_ssl: option to not verify ssl certificates
         """
-        super(ReportPortalService, self).__init__()
-        self.endpoint = endpoint
-        self.api_base = api_base
-        self.project = project
-        self.token = token
+        self._api = APIDispatcher(endpoint=endpoint, project=project, token=token, api_base=api_base,
+                                  verify_ssl=verify_ssl, retries=retries)
         self.is_skipped_an_issue = is_skipped_an_issue
-        self.base_url = uri_join(self.endpoint,
-                                 self.api_base,
-                                 self.project)
-
-        self.session = requests.Session()
-        if retries:
-            self.session.mount('https://', HTTPAdapter(max_retries=retries))
-            self.session.mount('http://', HTTPAdapter(max_retries=retries))
-        self.session.headers["Authorization"] = "bearer {0}".format(self.token)
-        self.stack = [None]
         self.launch_id = None
-        self.verify_ssl = verify_ssl
 
     def terminate(self):
-        pass
+        """
+        Intentionally empty method, nothing to do on terminate
+        """
 
-    def start_launch(self, name, start_time, description=None, tags=None,
-                     mode=None):
-        data = {
-            "name": name,
-            "description": description,
-            "tags": tags,
-            "start_time": start_time,
-            "mode": mode
-        }
-        url = uri_join(self.base_url, "launch")
-        r = self.session.post(url=url, json=data, verify=self.verify_ssl)
-        self.launch_id = _get_id(r)
-        self.stack.append(None)
-        logger.debug("start_launch - Stack: %s", self.stack)
-        return self.launch_id
+    def start_launch(self, name, start_time=None, description=None, tags=None, mode=None):
+        return self._api.start_launch(name=name, start_time=start_time)
 
     def _finalize_launch(self, end_time, action, status):
         data = {
