@@ -232,6 +232,10 @@ class APIDispatcher(object):
         :param issue:       Issue of current test item. Custom structure.
         :return:
         """
+        # check if skipped test should not be marked as "TO INVESTIGATE"
+        if issue is None and status.lower() == "skipped" and not self.is_skipped_an_issue:
+            issue = {"issue_type": "NOT_ISSUE"}
+
         data = self._prepare_finish_item(end_time, launch_uuid, status, description, attributes, retry, issue)
         return self._put(url=self._build_path("item", item_uuid), data=data).message
 
@@ -247,7 +251,7 @@ class APIDispatcher(object):
 
     def save_log(self, project_name, launch_uuid, time,
                  # Optional arguments
-                 item_uuid=NOT_SET, message=NOT_SET, level=NOT_SET):
+                 item_uuid=NOT_SET, message=NOT_SET, level=NOT_SET, attachments=NOT_SET):
         """
         We can save logs for test items. It is not necessary to save log when test item already finished.
         We can create log for test item with in_progress status.
@@ -258,22 +262,36 @@ class APIDispatcher(object):
         :param time:        Log time
         :param item_uuid:   Test item UUID
         :param message:     Log message
-        :param level:       Log level.
-                            Allowable values: error(40000), warn(30000), info(20000),
+        :param level:       Log level.  Allowable values: error(40000), warn(30000), info(20000),
                             debug(10000), trace(5000), fatal(50000), unknown(60000)
+        :param attachments: a dict of:
+                    name: name of attachment
+                    data: file object or content
+                    mime: content type for attachment
         :return:
         """
         data = self._prepare_save_log(launch_uuid, time, item_uuid, message, level, file_data=NOT_SET)
         return self._post(URIUtils.uri_join(project_name, "log"), data=data).message
 
-    def batch_save_logs(self, name, content, content_type):
-        """
+    def save_log_batch(self):
+        pass
 
-        :param name:
-        :param content:
-        :param content_type:
-        :return:
+    def update_test_item(self, item_uuid, description=None, tags=None):
         """
+        Update test item.
+        :param item_uuid:
+        :param description: test item description
+        :param tags: test item tags
+        """
+        data = {
+            "description": description,
+            "tags": tags,
+        }
+
+        return self._put(URIUtils.uri_join(self.base_url, "item", item_uuid, "update"), data=data).message
+
+    def get_project_settings(self):
+        return self._get(URIUtils.uri_join(self.base_url, "settings")).json
 
 
 class URIUtils(object):
