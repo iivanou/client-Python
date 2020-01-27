@@ -111,13 +111,12 @@ class APIDispatcher(object):
 
     def _prepare_start_item(self, name, start_time, item_type, launch_uuid, description, attributes, uuid,
                             code_ref, parameters, unique_id, retry, has_stats):
-        if parameters is not NOT_SET and parameters is not None:
+        if parameters is not NOT_SET:
             parameters = [{"key": key, "value": str(value)} for key, value in parameters.items()]
 
         data = {}
         self._update_data(data, "name", name)
         self._update_data(data, "startTime", start_time or self._time_producer())
-
         self._update_data(data, "type", item_type)
         self._update_data(data, "launchUuid", launch_uuid)
         self._update_data(data, "description", description)
@@ -236,14 +235,25 @@ class APIDispatcher(object):
         data = self._prepare_finish_item(end_time, launch_uuid, status, description, attributes, retry, issue)
         return self._put(url=self._build_path("item", item_uuid), data=data).message
 
-    def save_log(self, launch_uuid, time,
+    def _prepare_save_log(self, launch_uuid, time, item_uuid, message, level, file_data):
+        data = {}
+        self._update_data(data, "launchUuid", launch_uuid)
+        self._update_data(data, "time", time or self._time_producer())
+        self._update_data(data, "itemUuid", item_uuid)
+        self._update_data(data, "message", message)
+        self._update_data(data, "level", level)
+        self._update_data(data, "file", file_data)
+        return data
+
+    def save_log(self, project_name, launch_uuid, time,
                  # Optional arguments
-                 item_uuid=None, message=None, level=None):
+                 item_uuid=NOT_SET, message=NOT_SET, level=NOT_SET):
         """
         We can save logs for test items. It is not necessary to save log when test item already finished.
         We can create log for test item with in_progress status.
         Common endpoint: POST /api/{version}/{projectName}/log
 
+        :param project_name:Project name
         :param launch_uuid: Launch UUID
         :param time:        Log time
         :param item_uuid:   Test item UUID
@@ -253,6 +263,8 @@ class APIDispatcher(object):
                             debug(10000), trace(5000), fatal(50000), unknown(60000)
         :return:
         """
+        data = self._prepare_save_log(launch_uuid, time, item_uuid, message, level, file_data=NOT_SET)
+        return self._post(URIUtils.uri_join(project_name, "log"), data=data).message
 
     def batch_save_logs(self, name, content, content_type):
         """
