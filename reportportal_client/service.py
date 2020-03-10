@@ -28,23 +28,25 @@ class ReportPortalService(object):
     """
     Service class with report portal event callbacks.
     """
+    DEFAULT_API_BASE = "api/v1"
 
-    def __init__(self, endpoint, project, token, api_base="api/v1",
-                 is_skipped_an_issue=True, verify_ssl=True, retries=None):
-        """Init the service class.
-
-        Args:
-            endpoint: endpoint of report portal service.
-            project: project name to use for launch names.
-            token: authorization token.
-            api_base: defaults to api/v1, can be changed to other version.
-            is_skipped_an_issue: option to mark skipped tests as not
-                'To Investigate' items on Server side.
-            verify_ssl: option to not verify ssl certificates
+    def __init__(self, endpoint, project, token, api_base=DEFAULT_API_BASE,
+                 investigate_skipped=True, verify_ssl=True, retries=None):
         """
+        Init the service class.
+
+        :param endpoint: endpoint of the report portal service
+        :param project: project name to use for launch names
+        :param token: authorization token
+        :param api_base: an API version, defaults to latest stable path slice
+        :param investigate_skipped: an option not to mark skipped tests 'To Investigate' on the server side
+        :param verify_ssl: option to not verify ssl certificates
+        :param retries: number of retries for HTTP(S) adapters
+        """
+
         self._api = APIDispatcher(endpoint=endpoint, project=project, token=token, api_base=api_base,
                                   verify_ssl=verify_ssl, retries=retries)
-        self.is_skipped_an_issue = is_skipped_an_issue
+        self.investigate_skipped = investigate_skipped
         self.launch_id = None
 
     def terminate(self):
@@ -115,7 +117,7 @@ class ReportPortalService(object):
 
     def finish_test_item(self, end_time, status, issue=None):
         # check if skipped test should not be marked as "TO INVESTIGATE"
-        if issue is None and status == "SKIPPED" and not self.is_skipped_an_issue:
+        if issue is None and status == "SKIPPED" and not self.investigate_skipped:
             issue = {"issue_type": "NOT_ISSUE"}
 
         data = {

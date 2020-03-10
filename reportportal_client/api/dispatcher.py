@@ -14,29 +14,43 @@ __all__ = ["APIDispatcher"]
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
 
+RP_LOG_LEVELS = {
+    60000: "UNKNOWN",
+    50000: "FATAL",
+    40000: "ERROR",
+    30000: "WARN",
+    20000: "INFO",
+    10000: "DEBUG",
+    5000: "TRACE"
+}
+
 
 class APIDispatcher(object):
     """
-    Interfacing low-level API to the user methods with DTOs.
+    Middleware for interfacing API to the user methods and DTOs.
+    A middleman between an RP service and requests library
+
     The API description: https://github.com/reportportal/documentation/blob/master/src/md/src/DevGuides/reporting.md
+    Endpoints list: https://github.com/reportportal/documentation/blob/master/src/md/src/DevGuides/api-differences.md
     """
 
     DEFAULT_ADAPTER_RETRIES = 0
     PROTOCOLS = ["http://", "https://"]
 
     def __init__(self, endpoint, api_base, project, token, verify_ssl=True, retries=DEFAULT_ADAPTER_RETRIES):
-        self.base_url = URIUtils.uri_join(endpoint, api_base, project)  # type: str
-        self.verify_ssl = verify_ssl  # type: bool
-
         self._api_endpoint = endpoint  # type: str
         self._api_base = api_base  # type: str
         self._project = project  # type: str
+
         self._token = token  # type: str
         self._session = requests.Session()  # type : requests.Session
         self._launch = None  # type: typing.Optional[RPItem]
 
         # A function that generates timestamp for each start and stop call
         self._time_producer = None
+
+        self.base_url = URIUtils.uri_join(endpoint, api_base, project)  # type: str
+        self.verify_ssl = verify_ssl  # type: bool
 
         self._setup_session(retries=retries)
 
@@ -78,9 +92,28 @@ class APIDispatcher(object):
         return RPResponse(response_data)
 
     def logger_add_handler(self, handler):
-        logger.addHandler(handler)
+        # type: (logging.Handler) -> bool
+        """
+        Add a handler to the logger handlers list, if the handler is not yet in there.
 
-    def set_start_time_producer(self, producer):
+        :param handler: a logger handler to add
+        :return: True if the handler was added, otherwise False because it is already there
+        """
+        if handler in logger.handlers:
+            return False
+
+        logger.addHandler(handler)
+        return True
+
+    def set_time_producer(self, producer):
+        """
+        Allows setting a callable to automatically get a time string in a predefined format.
+        For instance:
+        >>> set_time_producer(lambda: time.strftime("%a, %d %b %Y %H:%M:%S +0000"))
+
+        :param producer: a callable that constructs current time in string format
+        :return: nothing
+        """
         assert callable(producer) or producer is None
         self._time_producer = producer
 
@@ -156,7 +189,7 @@ class APIDispatcher(object):
                             2019-11-22T11:47:01+00:00 (RFC 3339);
                             1574423221000 (Unix Timestamp)
         :param description: Description of launch
-        :param uuid:        Launch uuid (string identificator)
+        :param uuid:        Launch uuid (string identifier)
         :param attributes:  Launch attributes(tags). Pairs of key and value
         :param mode:        Launch mode. Allowable values 'default' or 'debug'
         :param rerun:       Rerun mode. Allowable values 'true' of 'false'
@@ -212,7 +245,8 @@ class APIDispatcher(object):
 
     def finish_item(self, item_uuid, launch_uuid, end_time=None,
                     # Optional arguments
-                    status=NOT_SET, description=NOT_SET, attributes=NOT_SET, retry=NOT_SET, issue=NOT_SET):
+                    status=NOT_SET, description=NOT_SET, attributes=NOT_SET, retry=NOT_SET, issue=NOT_SET,
+                    need_investigate_skipped=True):
         """
         To finish the test item we should send the following request: PUT /api/{version}/{projectName}/item/{itemUuid}
         If item finished successfully in the response will be message with item uuid.
@@ -230,10 +264,11 @@ class APIDispatcher(object):
         :param attributes:  Test item attributes(tags). Pairs of key and value. Overrides attributes on start
         :param retry:       Used to report retry of test. Allowable values: 'true' or 'false'
         :param issue:       Issue of current test item. Custom structure.
+        :param need_investigate_skipped:
         :return:
         """
         # check if skipped test should not be marked as "TO INVESTIGATE"
-        if issue is None and status.lower() == "skipped" and not self.is_skipped_an_issue:
+        if issue is None and status.lower() == "skipped" and not need_investigate_skipped:
             issue = {"issue_type": "NOT_ISSUE"}
 
         data = self._prepare_finish_item(end_time, launch_uuid, status, description, attributes, retry, issue)
