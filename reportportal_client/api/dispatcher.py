@@ -7,6 +7,7 @@ from requests.adapters import HTTPAdapter
 
 from .items import RPItem
 from .rp_response import RPResponse
+from ..static.convertors import _dict_to_payload
 from ..static.defines import NOT_SET
 
 __all__ = ["APIDispatcher"]
@@ -129,6 +130,8 @@ class APIDispatcher(object):
         return self._launch.uuid
 
     def _prepare_start_launch(self, name, start_time, description, uuid, attributes, mode, rerun, rerun_of):
+        if attributes is not NOT_SET:
+            attributes = _dict_to_payload(attributes)
         data = {}
         self._update_data(data, "name", name)
         self._update_data(data, "startTime", start_time or self._time_producer())
@@ -136,7 +139,6 @@ class APIDispatcher(object):
         self._update_data(data, "description", description)
         self._update_data(data, "uuid", uuid)
         self._update_data(data, "attributes", attributes)
-        self._update_data(data, "tags", attributes)
         self._update_data(data, "mode", mode)
         self._update_data(data, "rerun", rerun)
         self._update_data(data, "rerunOf", rerun_of)
@@ -145,7 +147,9 @@ class APIDispatcher(object):
     def _prepare_start_item(self, name, start_time, item_type, launch_uuid, description, attributes, uuid,
                             code_ref, parameters, unique_id, retry, has_stats):
         if parameters is not NOT_SET:
-            parameters = [{"key": key, "value": str(value)} for key, value in parameters.items()]
+            parameters = _dict_to_payload(parameters)
+        if attributes is not NOT_SET:
+            attributes = _dict_to_payload(attributes)
 
         data = {}
         self._update_data(data, "name", name)
@@ -154,7 +158,6 @@ class APIDispatcher(object):
         self._update_data(data, "launchUuid", launch_uuid)
         self._update_data(data, "description", description)
         self._update_data(data, "attributes", attributes)
-        self._update_data(data, "tags", attributes)
         self._update_data(data, "uuid", uuid)
         self._update_data(data, "codeRef", code_ref)
         self._update_data(data, "parameters", parameters)
