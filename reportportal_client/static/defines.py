@@ -15,7 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-import enum
+from aenum import Enum, IntEnum
 
 
 RP_LOG_LEVELS = {
@@ -47,7 +47,7 @@ class _PresenceSentinel(object):
     __bool__ = __nonzero__  # Python3 support
 
 
-class ItemStartType(str, enum.Enum):
+class ItemStartType(str, Enum):
     """This class defines item type mapping."""
 
     BEFORE_CLASS = 'before_class'
@@ -69,7 +69,7 @@ class ItemStartType(str, enum.Enum):
     AFTER_TEST = 'after_test'
 
 
-class Priority(enum.IntEnum):
+class Priority(IntEnum):
     """Generic enum for various operations prioritization."""
 
     PRIORITY_IMMEDIATE = 0x0
@@ -80,5 +80,7 @@ class Priority(enum.IntEnum):
 
 ATTRIBUTE_LENGTH_LIMIT = 128
 DEFAULT_PRIORITY = Priority.PRIORITY_MEDIUM
+LOW_PRIORITY = Priority.PRIORITY_LOW
 NOT_FOUND = _PresenceSentinel()
 NOT_SET = _PresenceSentinel()
+SEND_RETRY_COUNT = 10

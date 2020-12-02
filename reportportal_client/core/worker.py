@@ -15,10 +15,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-from enum import auto, Enum, unique
+from aenum import auto, Enum, unique
 import logging
 from threading import currentThread, Thread
-from queue import Empty
+
+from six.moves import queue
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
@@ -59,7 +60,7 @@ class APIWorker(object):
             cmd = self._cmd_queue.get_nowait()
             logger.debug('[%s] Received {%s} command', self.name, cmd)
             return cmd
-        except Empty:
+        except queue.Empty:
             return None
 
     def _command_process(self, cmd):
@@ -107,10 +108,10 @@ class APIWorker(object):
     def _request_get(self):
         """Get response object from the data queue."""
         try:
-            _, request = self._data_queue.get_nowait()
+            request = self._data_queue.get_nowait()
             logger.debug('[%s] Received {%s} request', self.name, request)
             return request
-        except Empty:
+        except queue.Empty:
             return None
 
     def _request_process(self, request):
@@ -132,6 +133,13 @@ class APIWorker(object):
         if self._thread.isAlive() and self._thread is not currentThread():
             self._thread.join()
         self._thread = None
+
+    def is_alive(self):
+        """Check whether the current worker is alive or not.
+
+        :return: True is self._thread is not None, False otherwise
+        """
+        return bool(self._thread)
 
     def send_command(self, cmd):
         """Send control command to the worker queue."""

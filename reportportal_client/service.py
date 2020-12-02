@@ -16,7 +16,6 @@ limitations under the License.
 
 import json
 from time import sleep
-
 import requests
 import uuid
 import logging
@@ -24,6 +23,8 @@ import logging
 import six
 from six.moves.collections_abc import Mapping
 from requests.adapters import HTTPAdapter
+
+from reportportal_client.core.log_manager import LogManager
 
 from .errors import ResponseError, EntryCreatedError, OperationCompletionError
 from .helpers import verify_value_length
@@ -206,10 +207,13 @@ class ReportPortalService(object):
         self.session.headers["Authorization"] = "bearer {0}".format(self.token)
         self.launch_id = kwargs.get('launch_id')
         self.verify_ssl = verify_ssl
+        self.log_manager = LogManager(
+            self.endpoint, self.session, 'v2', self.launch_id, self.project,
+            log_batch_size=log_batch_size)
 
     def terminate(self, *args, **kwargs):
         """Call this to terminate the service."""
-        pass
+        self.log_manager.stop()
 
     def start_launch(self,
                      name,
@@ -221,6 +225,7 @@ class ReportPortalService(object):
                      rerunOf=None,
                      **kwargs):
         """Start a new launch with the given parameters."""
+        self.log_manager.start()
         if attributes and isinstance(attributes, dict):
             attributes = _dict_to_payload(attributes)
         data = {
@@ -235,6 +240,7 @@ class ReportPortalService(object):
         url = uri_join(self.base_url_v2, "launch")
         r = self.session.post(url=url, json=data, verify=self.verify_ssl)
         self.launch_id = _get_id(r)
+        self.log_manager.launch_id = self.launch_id
         logger.debug("start_launch - ID: %s", self.launch_id)
         return self.launch_id
 
@@ -453,22 +459,7 @@ class ReportPortalService(object):
         :param item_id:  id of item
         :return: id of item from response
         """
-        data = {
-            "launchUuid": self.launch_id,
-            "time": time,
-            "message": message,
-            "level": level,
-        }
-        if item_id:
-            data["itemUuid"] = item_id
-        if attachment:
-            data["attachment"] = attachment
-            return self.log_batch([data], item_id=item_id)
-        else:
-            url = uri_join(self.base_url_v2, "log")
-            r = self.session.post(url=url, json=data, verify=self.verify_ssl)
-            logger.debug("log - ID: %s", item_id)
-            return _get_id(r)
+        self.log_manager.log(time, message, level, attachment, item_id)
 
     def log_batch(self, log_data, item_id=None, force=False):
         """
